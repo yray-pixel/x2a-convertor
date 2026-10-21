@@ -1,5 +1,6 @@
 """Tests for the publish-aap function and CLI contract."""
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -90,3 +91,43 @@ class TestPublishCLI:
         result = CliRunner().invoke(command, self.ARGS)
         assert result.exit_code == 1
         assert "AAP sync failed: denied" in result.output
+
+    def test_generate_aap_config_uses_request_document(self, tmp_path, command):
+        request = tmp_path / "request.json"
+        request.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "repository_path": str(tmp_path),
+                    "configuration_directory": "config/test",
+                    "project": {
+                        "organization": "Platform",
+                        "repository_url": "https://github.com/org/repo.git",
+                        "repository_branch": "main",
+                    },
+                    "job_template": {
+                        "module_name": "nginx",
+                        "playbook": "project/ansible/run_nginx.yml",
+                        "inventory": "Production",
+                    },
+                }
+            )
+        )
+        directory = tmp_path / "config/test"
+        directory.mkdir(parents=True)
+        (directory / "controller_projects.yml").write_text("controller_projects: []\n")
+        (directory / "controller_job_templates.yml").write_text(
+            "controller_templates: []\n"
+        )
+
+        response = CliRunner().invoke(
+            command, ["generate-aap-config", "--request", str(request)]
+        )
+
+        assert response.exit_code == 0, response.output
+        result = json.loads(response.output)
+        assert result["project_name"] == "x2a_nginx"
+        assert result["job_template_name"] == "x2a_nginx"
+        assert result["changed"] is True
+        assert (directory / "controller_projects.yml").is_file()
+        assert (directory / "controller_job_templates.yml").is_file()

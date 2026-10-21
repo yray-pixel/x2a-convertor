@@ -16,6 +16,10 @@ from src.exporters.migrate import migrate_module
 from src.health import check_aap, check_galaxy, check_model
 from src.init import init_project
 from src.inputs.analyze import analyze_project
+from src.publishers.aap_config_as_code import (
+    AAPConfigAsCodeGenerator,
+    AAPConfigRequest,
+)
 from src.publishers.publish import publish_aap
 from src.report import report_artifacts
 from src.types.technology import Technology
@@ -203,6 +207,22 @@ def publish_aap_cmd(target_repo, target_branch, project_id) -> None:
     click.echo(
         f"\nAAP project sync requested: {result.project_name} (ID: {result.project_id})"
     )
+
+
+@cli.command("generate-aap-config")
+@click.option(
+    "--request",
+    "request_path",
+    required=True,
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="Versioned JSON request describing the AAP configuration to generate.",
+)
+@handle_exceptions
+def generate_aap_config_cmd(request_path: Path) -> None:
+    """Generate AAP Config-as-Code YAML in a checked-out repository."""
+    request = AAPConfigRequest.from_path(request_path)
+    result = AAPConfigAsCodeGenerator(request).generate()
+    click.echo(result.model_dump_json(indent=2))
 
 
 @cli.command()

@@ -16,10 +16,8 @@ from src.exporters.migrate import migrate_module
 from src.health import check_aap, check_galaxy, check_model
 from src.init import init_project
 from src.inputs.analyze import analyze_project
-from src.publishers.aap_config_as_code import (
-    AAPConfigAsCodeGenerator,
-    AAPConfigRequest,
-)
+from src.publishers.aap_config_as_code import AAPConfigAsCodeGenerator
+from src.publishers.models import AAPConfigRequest
 from src.publishers.publish import publish_aap
 from src.report import report_artifacts
 from src.types.technology import Technology

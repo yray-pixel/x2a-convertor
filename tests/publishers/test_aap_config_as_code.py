@@ -7,10 +7,8 @@ import pytest
 from pydantic import ValidationError
 from ruamel.yaml import YAML
 
-from src.publishers.aap_config_as_code import (
-    AAPConfigAsCodeGenerator,
-    AAPConfigRequest,
-)
+from src.publishers.aap_config_as_code import AAPConfigAsCodeGenerator
+from src.publishers.models import AAPConfigRequest
 
 
 class AAPRequestFactory:
@@ -112,6 +110,19 @@ class TestAAPConfigAsCodeGenerator:
             == "x2a_nginx_multisite"
         )
 
+    def test_creates_missing_directory_files_with_default_keys(self, tmp_path):
+        request = AAPConfigRequest.model_validate(AAPRequestFactory.payload(tmp_path))
+
+        result = AAPConfigAsCodeGenerator(request).generate()
+
+        projects = self._load(tmp_path / "config/test/controller_projects.yml")
+        templates = self._load(tmp_path / "config/test/controller_job_templates.yml")
+        assert result.changed is True
+        assert result.project_action == "added"
+        assert result.job_template_action == "added"
+        assert projects["controller_projects_x2a"][0]["name"] == "x2a_nginx_multisite"
+        assert templates["controller_templates_x2a"][0]["name"] == "x2a_nginx_multisite"
+
     @pytest.mark.parametrize(
         ("filename", "content", "message"),
         [
@@ -140,7 +151,7 @@ class TestAAPConfigAsCodeGenerator:
         with pytest.raises((TypeError, ValueError), match=message):
             AAPConfigAsCodeGenerator(request).generate()
 
-    def test_rejects_missing_directory_file_before_writing(self, tmp_path):
+    def test_creates_one_missing_directory_file(self, tmp_path):
         payload = AAPRequestFactory.payload(tmp_path)
         request = AAPConfigRequest.model_validate(payload)
         directory = tmp_path / "config/test"
@@ -148,10 +159,18 @@ class TestAAPConfigAsCodeGenerator:
         projects = directory / "controller_projects.yml"
         projects.write_text("controller_projects_a: []\n")
 
-        with pytest.raises(ValueError, match="does not exist"):
-            AAPConfigAsCodeGenerator(request).generate()
+        result = AAPConfigAsCodeGenerator(request).generate()
 
-        assert projects.read_text() == "controller_projects_a: []\n"
+        assert self._load(projects)["controller_projects_a"][0]["name"] == (
+            "x2a_nginx_multisite"
+        )
+        templates = directory / "controller_job_templates.yml"
+        assert templates.is_file()
+        assert self._load(templates)["controller_templates_x2a"][0]["name"] == (
+            "x2a_nginx_multisite"
+        )
+        assert result.files[0].status == "updated"
+        assert result.files[1].status == "created"
 
     def test_rejects_directory_traversal(self, tmp_path):
         payload = AAPRequestFactory.payload(tmp_path)
